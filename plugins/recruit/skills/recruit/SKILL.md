@@ -1,6 +1,6 @@
 ---
 name: recruit
-description: Run a deep candidate search for a recruiter using x402 pay-per-call endpoints (Apollo, Exa, Clado, Hunter, Minerva, social) on Base USDC via the awal wallet. Use when the user asks to source candidates, find applicants, build a shortlist, run a recruiting search, find engineers/developers/ML hires, find sales/marketing/BD hires, or "research who could fit role X". Output is a ranked, evidence-backed candidate report. Tech (engineering, ML) and GTM (sales, marketing, BD) recruiting are first-class; do not use for executive-only searches without the recruiter confirming.
+description: Run a deep candidate search for a recruiter using x402 pay-per-call endpoints (Exa, Apollo, Hunter, Minerva, Firecrawl) on Base USDC via the awal wallet. Use when the user asks to source candidates, find applicants, build a shortlist, run a recruiting search, find engineers/developers/ML hires, find sales/marketing/BD hires, or "research who could fit role X". Output is a ranked, evidence-backed candidate report. Tech (engineering, ML) and GTM (sales, marketing, BD) recruiting are first-class; do not use for executive-only searches without the recruiter confirming.
 ---
 
 # Recruit
@@ -13,10 +13,16 @@ Source and enrich candidate shortlists for a recruiter by orchestrating a curate
 
 Before sourcing, confirm:
 
-1. **Wallet authenticated**: `npx awal@2.0.3 status`. If not authed, run the `authenticate-wallet` skill.
-2. **USDC balance sufficient**: `npx awal@2.0.3 balance`. A typical 25-candidate search costs **$2–$8 USDC** depending on enrichment depth. If balance is low, run the `fund` skill.
+1. **Wallet authenticated**: `npx awal@latest status`. If not authed, run the `authenticate-wallet` skill.
+2. **USDC balance sufficient**: `npx awal@latest balance`. A typical 20-candidate search costs **$1–$3 USDC**. If balance is low, run the `fund` skill.
 
 Do not proceed without both.
+
+## Compatibility note
+
+**The awal CLI pays x402 v2 endpoints. The vetted v2 endpoints are at `https://stableenrich.dev/...`** — those are what this skill uses end-to-end.
+
+There is a richer set of recruitment endpoints (Tomba LinkedIn→email, Fiber natural-language profile search, Apollo via Orthogonal with a working contact reveal, Nyne, Sixtyfour) at `https://x402.orth.sh/...`, but those are x402 **v1** and currently fail when paid via awal. If the agent wants to use them, see `references/advanced-orthogonal.md` — that path requires running a small Node script with `x402-fetch` and a raw `PRIVATE_KEY`, not awal. Skip unless the recruiter explicitly asks.
 
 ## Workflow
 
@@ -28,8 +34,8 @@ Extract from the recruiter's request:
 - **Seniority**: IC / senior / staff / lead / manager / director
 - **Must-haves**: skills, domains, frameworks, industries, languages
 - **Nice-to-haves**: tenure, education, prior employers
-- **Location & work model**: city/region, remote/hybrid/onsite, work authorization if mentioned
-- **Headcount target**: how many candidates to surface (default: 15–25)
+- **Location & work model**: city/region, remote/hybrid/onsite
+- **Headcount target**: how many candidates to surface (default: 15–20)
 
 If any must-have is ambiguous, ask **one** clarifying question before spending — the rest can be inferred.
 
@@ -37,10 +43,12 @@ If any must-have is ambiguous, ask **one** clarifying question before spending �
 
 | Role type | Playbook |
 |-----------|----------|
-| Tech | `references/playbooks.md#tech` — Exa-first (GitHub, personal sites, LinkedIn), Apollo for filling in employer/title, Clado for LinkedIn → contact |
-| GTM | `references/playbooks.md#gtm` — Apollo-first (people-search by title/company/location), Apollo enrich, Hunter verify |
+| Tech | `references/playbooks.md#tech` — Exa-first across LinkedIn, GitHub, personal sites; Apollo for universe scan; Hunter guess+verify for emails |
+| GTM | `references/playbooks.md#gtm` — Exa LinkedIn search lead; Apollo people-search for company/title scan; Hunter guess+verify for emails |
 
-Read the relevant playbook section before running calls. Each playbook lists the recommended call sequence, input templates, and ranking signals.
+Both playbooks lead with **Exa LinkedIn search** because it's the only call that reliably returns full real names + LinkedIn URLs through stableenrich. Apollo `people-search` is useful as a universe scan but returns obfuscated names (`Du***g`, `O'***n`) and its enrichment endpoint does not currently expose contact data via stableenrich.
+
+Read the relevant playbook section before running calls.
 
 ### Step 3 — Source (wide net)
 
@@ -49,16 +57,22 @@ Run 2–4 parallel sourcing calls based on the playbook. Aim for **40–80 raw h
 ### Step 4 — Filter and dedupe
 
 - Drop hits missing the must-haves
-- Dedupe by (LinkedIn URL || email || full name + current employer)
-- Keep top **20–30** by initial fit signals (see playbook ranking heuristics)
+- Dedupe by (LinkedIn URL || full name + current employer)
+- Keep top **20** by initial fit signals (see playbook ranking heuristics)
 
 ### Step 5 — Enrich top N
 
 For each survivor:
 
-- **Contact**: Apollo `people-enrich` (cheapest at $0.0495) → if missing, Clado `contacts-enrich` ($0.20) as fallback
-- **Verify email**: Hunter `email-verifier` ($0.03) on any discovered email before reporting it
-- **Cross-reference** (tech only): Exa `contents` ($0.002) on the candidate's GitHub or personal site URL to pull a 1-line "what they build" signal
+- **Confirm current company / title**: `exa/contents` ($0.002) on the LinkedIn URL → pull headline & current role
+- **Discover email** via guess + verify (no working LinkedIn → email endpoint via awal):
+  1. Get the company domain (via Apollo `org-enrich` $0.0495 once per unique company, then cache)
+  2. Generate 2–3 likely email patterns: `firstname.lastname@domain`, `firstname@domain`, `flastname@domain`
+  3. `hunter/email-verifier` ($0.03) on each guess
+  4. Keep the first `result: "deliverable"`. If none verify, mark candidate as "LinkedIn only — recruiter to use InMail"
+- **Optional cross-reference** (tech only): `exa/contents` on the candidate's GitHub or blog ($0.002) for a 1-line "what they build" snippet
+
+For the **top 5 only**: `serper/news` ($0.04) — surfaces recent quotes, conference talks, or hiring news that strengthens ranking.
 
 ### Step 6 — Rank
 
@@ -73,26 +87,27 @@ Use `assets/report-template.md` as the structure. Include the running total spen
 All recruitment endpoints are called via:
 
 ```bash
-npx awal@2.0.3 x402 pay <url> -X POST -d '<json-body>' --json
+npx awal@latest x402 pay <url> -X POST -d '<json-body>' --json
 ```
 
 **Critical rules**:
 
 - Always pass `--json` so the response parses cleanly. The awal CLI rejects text/markdown responses even when payment settles, so JSON-returning endpoints are mandatory — every endpoint in `references/endpoints.md` returns JSON.
-- Single-quote JSON bodies to avoid shell expansion: `-d '{"q_keywords":"staff engineer"}'`.
+- Single-quote JSON bodies to avoid shell expansion: `-d '{"person_titles":["Account Executive"]}'`.
 - Do **not** pass `--max-amount` — the user has opted out of caps. Spend freely but report the total.
 - Run independent calls in parallel via separate Bash tool invocations in one message.
+- The awal CLI writes results to stdout but the format includes a leading status line; parse JSON starting at the first `{`.
 
-Example — Apollo people search:
+Example — Exa LinkedIn search:
 
 ```bash
-npx awal@2.0.3 x402 pay https://stableenrich.dev/api/apollo/people-search \
+npx awal@latest x402 pay https://stableenrich.dev/api/exa/search \
   -X POST \
-  -d '{"q_keywords":"senior react engineer","person_locations":["San Francisco"],"per_page":25}' \
+  -d '{"query":"senior account executive developer tools San Francisco","numResults":25,"category":"linkedin profile"}' \
   --json
 ```
 
-The full endpoint catalog (URLs, methods, input schemas, prices) lives in **`references/endpoints.md`** — read it before constructing any call.
+The full endpoint catalog (URLs, methods, input schemas, prices, known bugs) lives in **`references/endpoints.md`** — read it before constructing any call.
 
 ## Cost tracking
 
