@@ -15,20 +15,26 @@ The agent's output is a ranked, evidence-backed markdown shortlist — not raw A
 ## Install
 
 ```
-/plugin marketplace add Must-be-Ash/recruit-skill
-/plugin install recruit@must-be-ash
+claude plugin marketplace add Must-be-Ash/recruit-skill
+claude plugin install recruit@must-be-ash
 ```
 
-Then start a new session (or `/reload-plugins`) and the `recruit` skill is available.
+Then start a new session and the `recruit` skill is available.
 
 ## Prerequisites
 
-This plugin assumes the agent has the **awal** wallet skills installed and an authenticated wallet with USDC on Base:
+This skill requires the **awal** agent wallet. If you don't have it, install it first:
+
+```
+npx skills add coinbase/agentic-wallet-skills
+```
+
+This ships the `authenticate-wallet` and `fund` skills. Run them to set up and top up your wallet before using `recruit`.
+
+Then confirm you're ready:
 
 - `npx awal@2.0.3 status` — confirm authenticated
 - `npx awal@2.0.3 balance` — confirm USDC > $5 (typical 25-candidate search costs $2–$8)
-
-If the wallet isn't set up, the agent should run the `authenticate-wallet` and `fund` skills first (both ship as part of the standard awal skill bundle).
 
 ## Usage
 
