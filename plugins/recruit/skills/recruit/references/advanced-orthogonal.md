@@ -1,8 +1,20 @@
-# Advanced: Orthogonal x402 v1 endpoints (Tomba, Fiber, Nyne, Sixtyfour, Apollo)
+# Advanced: Orthogonal x402 v1 endpoints
 
-**Read only when the recruiter explicitly asks for endpoints not available via awal — e.g. "find me an email from this LinkedIn URL", "do natural-language profile search", or "use Fiber/Tomba/Nyne".**
+**Read only when the recruiter explicitly opts into using a raw private key.** This is the workaround for the awal v1 limitation — the endpoints below are verified working, but the awal CLI cannot render their responses today.
 
-The default skill workflow uses `https://stableenrich.dev/...` paid via the awal CLI. Awal cannot pay the richer recruitment stack hosted at `https://x402.orth.sh/...` (verified: x402 v1 payment requirements, awal signs but the orth.sh facilitator rejects). To use the orth.sh stack, the agent must run a small Node script with `x402-fetch` and a raw `PRIVATE_KEY` env var.
+The default skill workflow uses `https://stableenrich.dev/...` paid via the awal CLI. The richer recruitment stack at `https://x402.orth.sh/...` requires either:
+- Waiting for awal to add x402 v1 response handling, OR
+- Running a small Node script with `x402-fetch` and a raw `PRIVATE_KEY` env var (this document)
+
+**Verified endpoint status (2026-04):**
+
+| Endpoint | Verified via x402-fetch | Notes |
+|----------|-------------------------|-------|
+| `tomba/v1/linkedin?url=<linkedin>` | ✅ Returns email, pattern, score, verification status | $0.01 — best LinkedIn → email path in catalog |
+| `apollo/api/v1/people/match` (with `reveal_personal_emails:true`) | ✅ Returns `email`, `email_status: "verified"`, full profile | $0.01 — best one-call enrichment |
+| `apollo/api/v1/mixed_people/api_search` | ✅ Returns `total_entries: <real count>` (vs stableenrich's broken 0) | FREE |
+| `fiber/v1/natural-language-search/profiles` | ❌ Returns 500 `"Failed to process payment middleware"` | Skip — Fiber middleware broken on proxy |
+| Other Tomba, Nyne, Sixtyfour endpoints | Untested | Likely work — same proxy infra as Tomba `/v1/linkedin` |
 
 ## When this stack is worth the setup
 

@@ -1,25 +1,26 @@
 # Curated Endpoint Catalog
 
-All endpoints below are x402 **v2** pay-per-call, settle in USDC on Base, return JSON, and are paid via the awal CLI:
+All endpoints called via the awal CLI:
 
 ```bash
 npx awal@latest x402 pay <url> -X POST -d '<json>' --json
 ```
 
-Prices are per single call. They may drift — treat as estimates. Every claim about behavior here was verified by direct calls in 2026-04 — the warnings about broken endpoints reflect actual server responses, not theoretical concerns.
+Prices are per single call. Behavior here was **verified by direct call** in 2026-04 — both via awal (for stableenrich endpoints) and via `x402-fetch` with a raw key (to distinguish endpoint bugs from awal bugs). Warnings reflect actual server responses, not theoretical concerns.
 
 ## Table of contents
 
-1. [Exa (PRIMARY for both sourcing and content extraction)](#exa)
-2. [Apollo (universe scan only — see warnings)](#apollo)
+1. [Exa (PRIMARY for sourcing and content extraction)](#exa)
+2. [Apollo (universe scan + company enrich)](#apollo)
 3. [Hunter (email verification — pair with guess patterns)](#hunter)
 4. [Minerva (deep enrichment when you have an email/phone)](#minerva)
 5. [Firecrawl (scrape JS-heavy candidate pages)](#firecrawl)
 6. [Serper (recency / news signal)](#serper)
 7. [Reddit (community signal, sparingly)](#reddit)
 8. [StableSocial (audience-building roles only)](#stablesocial)
-9. [Broken endpoints — do not call](#broken-endpoints)
-10. [Bazaar fallback](#bazaar-fallback)
+9. [Verified working but awal can't pay yet (x402 v1 — Tomba, Apollo via Orthogonal)](#x402-v1-blocked-on-awal)
+10. [Server-side broken — do not call](#server-broken)
+11. [Bazaar fallback](#bazaar-fallback)
 
 ---
 
@@ -27,7 +28,7 @@ Prices are per single call. They may drift — treat as estimates. Every claim a
 
 Base URL: `https://stableenrich.dev`
 
-**Exa is the workhorse of this skill.** Verified working: returns real names + LinkedIn URLs in ~800ms for $0.01. Use it for both tech and GTM sourcing.
+**Exa is the workhorse of this skill.** Verified working via awal: returns real names + LinkedIn URLs in ~800ms for $0.01.
 
 ### `POST /api/exa/search` — $0.01
 
@@ -49,7 +50,7 @@ Patterns that work well:
 {"query": "ML engineer transformers inference optimization blog", "numResults": 15, "category": "personal site"}
 ```
 
-Response shape: `{"results": [{"id": <linkedin_url>, "title": "<full name + headline>", "url": <linkedin_url>, "publishedDate": "...", "author": "<full name>", "image": "..."}]}`. Title typically formatted as `"Full Name - Title @ Company"`.
+Response shape: `{"results": [{"id": <url>, "title": "<full name + headline>", "url": <url>, "publishedDate": "...", "author": "<full name>", "image": "..."}]}`. Title typically formatted as `"Full Name - Title @ Company"`.
 
 ### `POST /api/exa/contents` — $0.002
 
@@ -74,7 +75,7 @@ Given one strong-fit candidate URL, find similar profiles. Useful when the recru
 
 ### `POST /api/exa/answer` — $0.01
 
-AI-generated answer over web search. Useful for one-shot priors like "who are the most-cited authors on retrieval-augmented generation 2024-2025" — but always verify hits with Exa search before trusting.
+AI-generated answer over web search. Useful for one-shot priors — but always verify hits with Exa search before trusting.
 
 ---
 
@@ -82,7 +83,7 @@ AI-generated answer over web search. Useful for one-shot priors like "who are th
 
 Base URL: `https://stableenrich.dev`
 
-**Apollo via stableenrich is partially working**: search endpoints work for universe scanning, but the enrichment endpoint does NOT currently return contact data (verified 2026-04). Use Apollo for company discovery and "which orgs have these titles" — do not rely on it for emails.
+**Apollo via stableenrich works for search but NOT for enrichment.** Use search endpoints to scan for who has these titles where; do not rely on `people-enrich` (it's server-broken — see [server-side broken](#server-broken)).
 
 ### `POST /api/apollo/people-search` — $0.02
 
@@ -99,7 +100,7 @@ Universe scan: find people by title + location + employer. Returns obfuscated na
 
 - ❌ Using `q_keywords` for titles returns **0 hits**. Use `person_titles` array.
 - ❌ Combining `person_titles` + `q_keywords` returns **0 hits**. Use one or the other.
-- ❌ `pagination.total_entries` is always `0` even when results are present. Trust `people.length`.
+- ❌ `pagination.total_entries` is always `0` even when results are present (the stableenrich wrapper drops the count). Trust `people.length`.
 
 Working call:
 
@@ -107,7 +108,7 @@ Working call:
 {"person_titles": ["Account Executive", "Enterprise Account Executive"], "person_locations": ["San Francisco"], "per_page": 25}
 ```
 
-How to actually use the obfuscated results: take `first_name + organization.name` and run an Exa LinkedIn search to recover the full name and LinkedIn URL.
+How to use the obfuscated results: take `first_name + organization.name` and run an Exa LinkedIn search to recover the full name and LinkedIn URL.
 
 ### `POST /api/apollo/org-search` — $0.02
 
@@ -119,7 +120,7 @@ Find target companies by location and (weakly) keyword.
 
 Returns rich firmographics (`name`, `website_url`, `linkedin_url`, `founded_year`, `organization_revenue`, headcount growth).
 
-**Verified gotcha**: `q_keywords` filtering is weak — orgs come back filtered mostly by location, with industry keywords only marginally affecting ranking. Don't trust it for tight industry targeting; instead use Exa LinkedIn search with the company type baked into the query.
+**Verified gotcha**: `q_keywords` filtering is weak — orgs come back filtered mostly by location. Don't trust it for tight industry targeting; use Exa LinkedIn search with the company type baked into the query instead.
 
 ### `POST /api/apollo/org-enrich` — $0.0495
 
@@ -159,7 +160,7 @@ For each top-N candidate:
 3. Verify each guess in parallel via `hunter/email-verifier`.
 4. Keep the first `deliverable`. If none verify, mark "LinkedIn only".
 
-Cost: ~$0.09 per candidate (3 verifies). Pattern-detection accuracy is high on US tech companies; lower on EMEA/legacy enterprises.
+Cost: ~$0.09 per candidate (3 verifies). Pattern accuracy is high on US tech companies; lower on EMEA/legacy enterprises.
 
 ---
 
@@ -257,25 +258,86 @@ Skip StableSocial entirely for IC engineering / standard GTM roles.
 
 ---
 
-## Broken endpoints
+## x402 v1 — blocked on awal
 
-These are documented because earlier versions of this skill recommended them. **Do not call** unless and until verified working again:
+These endpoints are **verified working** via direct testing (`x402-fetch` SDK with a raw private key in 2026-04), but the awal CLI cannot pay them today. Awal signs and submits the payment — the on-chain USDC transfer **does happen** (visible on basescan), but the orth.sh facilitator returns a response format awal cannot parse, so awal reports `"Payment was authorized but rejected by server"` and never surfaces the data. The fetched response sits orphaned.
 
-### ❌ `POST /api/apollo/people-enrich` — $0.0495 (broken via stableenrich for contact data)
+**Why include them in this catalog?** When awal adds x402 v1 support (or the orth.sh response format issue is resolved), these endpoints become the canonical recruiting flow — one $0.01 Apollo call replaces the entire `org-enrich + Hunter guess+verify` chain. The skill is structured so swapping them in is one playbook edit. Do not call them today via awal.
 
-Returns `status: "matched"` with `name` and `employment_history[].organization_name`, but **`email`, `linkedin_url`, `title`, `seniority`, `personal_emails` all come back null** — even when `reveal_personal_emails: true` is passed in the body. The `id` returned is also different from the input `person_id`, suggesting the wrapper isn't preserving the Apollo identity. Use Hunter guess+verify instead.
+If the recruiter insists on using these endpoints today, see `references/advanced-orthogonal.md` for the `x402-fetch` + raw `PRIVATE_KEY` workaround.
 
-### ❌ `POST /api/clado/contacts-enrich` — $0.20 (server-side rejection)
+### `GET https://x402.orth.sh/tomba/v1/linkedin?url=<linkedin-url>` — $0.01
 
-Returns `"Payment was authorized but rejected by server"` on every call attempt, with multiple LinkedIn URL formats. Endpoint exists in `awal x402 details` but execution is broken. Do not call.
+Returns verified email, full name, current company + domain, position, department, email pattern, and confidence score for a LinkedIn profile URL.
 
-### ⚠️ x402.orth.sh endpoints (Tomba, Fiber, Nyne, Sixtyfour, Apollo via Orthogonal) — incompatible with awal
+Verified response shape on Satya Nadella:
+```json
+{"data": {"email": "satyan@microsoft.com", "first_name": "Satya", "last_name": "Nadella",
+  "company": "Microsoft", "website_url": "microsoft.com", "pattern": "{f}{last}",
+  "department": "executive", "position": "ceo", "score": 100,
+  "verification": {"status": "valid", "date": "2026-02-14"}}}
+```
 
-There is a much richer recruitment stack at `https://x402.orth.sh/...` — Tomba `/v1/linkedin` ($0.01) returns email from a LinkedIn URL, Fiber `/v1/natural-language-search/profiles` accepts a recruiter brief in plain English, Apollo via Orthogonal exposes a working `reveal_personal_emails` flow, Nyne offers AI-scored search, Sixtyfour does deep find-email/find-phone.
+This is the cleanest LinkedIn → email path in the entire catalog. Coverage varies by candidate: famous executives are well-covered; mid-level ICs at small startups may not be in Tomba's database (returns nulls + score 0).
 
-**These all return x402 v1 payment requirements, and the awal CLI (any version) cannot pay them — the wallet signs and submits a payment which the orth.sh facilitator rejects.** Verified with awal 2.0.3 and awal 2.8.0.
+### `POST https://x402.orth.sh/apollo/api/v1/people/match` — $0.01
 
-If the recruiter explicitly asks to use this stack, see `references/advanced-orthogonal.md` — the orth.sh path requires a small Node script using `x402-fetch` with a raw `PRIVATE_KEY` env var, not awal.
+Apollo's real people-match endpoint with **working** `reveal_personal_emails: true`. Returns verified business email + full profile in one call.
+
+Body (LinkedIn URL or `email` or `first_name`+`last_name`+`organization_name`):
+```json
+{"linkedin_url": "https://www.linkedin.com/in/satyanadella", "reveal_personal_emails": true}
+```
+
+**Do not** also pass `reveal_phone_number: true` without also passing a `webhook_url` — Apollo returns a 400 because phone reveal is async-only.
+
+Verified response shape:
+```json
+{"person": {"email": "satyan@microsoft.com", "email_status": "verified",
+  "first_name": "Satya", "last_name": "Nadella", "title": "Chairman and CEO",
+  "headline": "Chairman and CEO at Microsoft", "linkedin_url": "...",
+  "organization": {"name": "Microsoft", "primary_domain": "microsoft.com", ...},
+  "seniority": "c_suite", "departments": ["c_suite"], "personal_emails": [],
+  "employment_history": [...]}}
+```
+
+When awal v1 lands, this single call replaces the entire enrichment loop in `playbooks.md` for the top 20 — cuts per-candidate cost from ~$0.10 to $0.01 and skips email guessing entirely.
+
+### `POST https://x402.orth.sh/apollo/api/v1/mixed_people/api_search` — FREE
+
+Apollo's people search through the Orthogonal proxy. **No payment required.** Returns the same `total_entries` count and obfuscated-name `people` array as stableenrich's people-search, **but `total_entries` actually populates** (verified: 7271 vs stableenrich's broken 0).
+
+Same body shape as stableenrich `people-search`:
+```json
+{"person_titles": ["Account Executive"], "person_locations": ["San Francisco"], "per_page": 25}
+```
+
+Useful as a free universe scan when awal v1 lands. Today, blocked by the same v1 issue.
+
+### Other orth.sh endpoints
+
+The Orthogonal proxy fronts a much larger catalog (Tomba's 20+ endpoints, Fiber, Nyne, Sixtyfour, more Apollo). Spec lives in the user's local docs at `/Users/ashnouruzi/bundle-maker/enrich/`. Not all are tested:
+
+- **Fiber `v1/natural-language-search/profiles`**: ❌ verified broken — returns 500 `"Failed to process payment middleware"`. Skip Fiber until fixed.
+- Other orth.sh endpoints (Nyne, Sixtyfour, other Apollo orth, other Tomba): not yet tested. Apply the same "blocked on awal v1" reasoning.
+
+---
+
+## Server-side broken
+
+Verified empty-body responses via **both** awal (when payment settles) and x402-fetch with a raw private key. **Do not call.** USDC is charged, no usable data is returned.
+
+### ❌ `POST https://stableenrich.dev/api/apollo/people-enrich` — $0.0495
+
+Returns empty body via x402-fetch (verified 2026-04 with `linkedin_url` and `email` inputs, with and without `reveal_personal_emails: true`). Earlier awal calls returned partial JSON with name + employment_history but null contact data — so the wrapper is intermittent at best, broken at worst. Not usable for contact resolution either way.
+
+Alternatives: use `apollo/api/v1/people/match` via Orthogonal (when awal v1 lands), or stay with the Hunter guess+verify pattern documented above.
+
+### ❌ `POST https://stableenrich.dev/api/clado/contacts-enrich` — $0.20
+
+Returns empty body via both awal and x402-fetch. Verified across multiple LinkedIn URL formats (with/without `www`, trailing slash, public profile URLs). Endpoint exists in `awal x402 details` but every actual call settles payment and returns nothing. Do not call.
+
+Alternatives: Tomba `/v1/linkedin` ($0.01, 95% cheaper, when awal v1 lands), or Hunter guess+verify pattern today.
 
 ---
 

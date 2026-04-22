@@ -20,9 +20,11 @@ Do not proceed without both.
 
 ## Compatibility note
 
-**The awal CLI pays x402 v2 endpoints. The vetted v2 endpoints are at `https://stableenrich.dev/...`** — those are what this skill uses end-to-end.
+**This skill is awal-only.** It uses the x402 v2 endpoints at `https://stableenrich.dev/...` that awal pays cleanly.
 
-There is a richer set of recruitment endpoints (Tomba LinkedIn→email, Fiber natural-language profile search, Apollo via Orthogonal with a working contact reveal, Nyne, Sixtyfour) at `https://x402.orth.sh/...`, but those are x402 **v1** and currently fail when paid via awal. If the agent wants to use them, see `references/advanced-orthogonal.md` — that path requires running a small Node script with `x402-fetch` and a raw `PRIVATE_KEY`, not awal. Skip unless the recruiter explicitly asks.
+There is a richer set of recruitment endpoints at `https://x402.orth.sh/...` (Tomba LinkedIn→email for $0.01, Apollo via Orthogonal with working `reveal_personal_emails:true` for $0.01, free Apollo people-search). They are **verified working endpoints** — testing in 2026-04 confirmed real data via direct x402-fetch, and basescan confirmed awal's payments to them settle on-chain. But the awal CLI cannot currently render the v1 response format and reports `"Payment was authorized but rejected by server"`, leaving the fetched data orphaned. The skill catalogs them in `references/endpoints.md` so the playbooks can switch to them in one edit when awal adds v1 support, but **does not call them today**.
+
+Two stableenrich endpoints (`apollo/people-enrich`, `clado/contacts-enrich`) are **server-side broken** (verified empty body via both awal and x402-fetch). The skill does not call them and the email-discovery flow works around them via Apollo `org-enrich` + Hunter guess+verify.
 
 ## Workflow
 
@@ -46,7 +48,7 @@ If any must-have is ambiguous, ask **one** clarifying question before spending �
 | Tech | `references/playbooks.md#tech` — Exa-first across LinkedIn, GitHub, personal sites; Apollo for universe scan; Hunter guess+verify for emails |
 | GTM | `references/playbooks.md#gtm` — Exa LinkedIn search lead; Apollo people-search for company/title scan; Hunter guess+verify for emails |
 
-Both playbooks lead with **Exa LinkedIn search** because it's the only call that reliably returns full real names + LinkedIn URLs through stableenrich. Apollo `people-search` is useful as a universe scan but returns obfuscated names (`Du***g`, `O'***n`) and its enrichment endpoint does not currently expose contact data via stableenrich.
+Both playbooks lead with **Exa LinkedIn search** because it's the only call that reliably returns full real names + LinkedIn URLs through stableenrich today. Apollo `people-search` is useful as a universe scan but returns obfuscated names (`Du***g`, `O'***n`) and its enrichment endpoint is server-broken on stableenrich (see `endpoints.md`). The cleanest enrichment paths (Tomba `/v1/linkedin` and Apollo via Orthogonal) are blocked on awal v1 support — see `endpoints.md` "x402 v1 — blocked on awal" section for the future-flow.
 
 Read the relevant playbook section before running calls.
 
