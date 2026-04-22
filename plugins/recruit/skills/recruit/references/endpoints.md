@@ -32,22 +32,32 @@ Base URL: `https://x402.orth.sh/apollo`
 
 ### `POST /api/v1/mixed_people/api_search` — FREE
 
-Universe scan. Returns up to 100 people per page matching structured filters. Names come back partly obfuscated (`first_name` + `last_name_obfuscated`) plus `id`, `title`, `organization.name`, `has_email`. Pair with `/people/match` to get full names + verified emails.
+Universe scan. Returns up to 100 people per page matching structured filters.
+
+**Critical pitfalls**:
+
+- Use `person_titles` (string array) for title filtering, **NOT** `q_keywords`. Putting a title in `q_keywords` returns 0 hits.
+- **Do not combine** `person_titles` with `q_keywords` in the same call — the combination returns 0 hits. Use one or the other.
+- Names come back partly obfuscated (`first_name` returned in full, `last_name_obfuscated` returned as `"Du***g"`). To get the full name + verified email, take the `id` from each result and call `/api/v1/people/match` (next endpoint, $0.01).
+
+Body fields:
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `person_titles` | string[] | Required for title filtering. Array of exact-ish titles. |
+| `person_titles` | string[] | Required for title filtering. Array of exact-ish titles, e.g. `["Account Executive", "Senior Account Executive"]`. |
 | `person_seniorities` | string[] | `owner`, `founder`, `c_suite`, `partner`, `vp`, `head`, `director`, `manager`, `senior`, `entry`. |
 | `person_locations` | string[] | City names or regions. |
 | `organization_locations` | string[] | Filter by company HQ location. |
 | `organization_num_employees_ranges` | string[] | E.g. `["1,10"]`, `["50,100"]`, `["1000,5000"]`. |
-| `q_keywords` | string | Free text. **Do not combine with `person_titles`** — returns 0 hits. |
+| `q_keywords` | string | Free text for industry/skill. Use **only without** `person_titles`. |
 | `per_page` | number | Up to 100. Use 25 for first pass. |
 | `page` | number | Pagination. |
 
 ```json
 {"person_titles": ["Account Executive", "Enterprise Account Executive"], "person_locations": ["San Francisco"], "per_page": 25}
 ```
+
+Response shape per person: `{"id": "...", "first_name": "Karen", "last_name_obfuscated": "Du***g", "title": "Account Executive", "organization": {"name": "Salesforce", ...}, "has_email": true, ...}`. Hand the `id` to `/people/match` for the rest.
 
 ### `POST /api/v1/people/match` — $0.01
 
