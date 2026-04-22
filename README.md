@@ -15,8 +15,7 @@ The agent's output is a ranked, evidence-backed markdown shortlist — not raw A
 ## Install
 
 ```
-claude plugin marketplace add Must-be-Ash/recruit-skill
-claude plugin install recruit@must-be-ash
+npx skills add Must-be-Ash/recruit-skill
 ```
 
 Then start a new session and the `recruit` skill is available.
