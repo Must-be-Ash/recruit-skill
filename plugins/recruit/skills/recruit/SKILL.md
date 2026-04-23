@@ -1,6 +1,6 @@
 ---
 name: recruit
-description: Run a deep candidate search for a recruiter using x402 pay-per-call endpoints (Exa, Apollo, Tomba, Hunter, Minerva, Firecrawl) on Base USDC via the awal wallet. Use when the user asks to source candidates, find applicants, build a shortlist, run a recruiting search, find engineers/developers/ML hires, find sales/marketing/BD hires, or "research who could fit role X". Output is a ranked, evidence-backed candidate report. Tech (engineering, ML) and GTM (sales, marketing, BD) recruiting are first-class; do not use for executive-only searches without the recruiter confirming.
+description: Run a deep candidate search for a recruiter using x402 pay-per-call endpoints (Apollo, Tomba, Exa, Firecrawl, Serper) on Base USDC via the awal wallet. Use when the user asks to source candidates, find applicants, build a shortlist, run a recruiting search, find engineers/developers/ML hires, find sales/marketing/BD hires, or "research who could fit role X". Output is a ranked, evidence-backed candidate report. Tech (engineering, ML) and GTM (sales, marketing, BD) recruiting are first-class; do not use for executive-only searches without the recruiter confirming.
 ---
 
 # Recruit
@@ -54,9 +54,13 @@ Run 2–4 parallel sourcing calls based on the playbook. Aim for **40–80 raw h
 
 ### Step 5 — Enrich top N
 
-For each survivor, one Apollo via Orthogonal `people/match` call ($0.01) returns verified business email, full profile, current title, organization with domain, and seniority. If Apollo doesn't have the candidate, fall back to Tomba `/v1/linkedin` ($0.01). If neither returns an email, mark "LinkedIn only — recruiter to InMail".
+For each survivor, one Apollo via Orthogonal `/people/match` call ($0.01) returns verified business email, full profile, current title, organization with domain, and seniority. If Apollo doesn't have the candidate:
 
-For tech candidates, also run `exa/contents` ($0.002) on the candidate's GitHub or blog for a 1-line "what they build" snippet.
+1. Tomba `/v1/linkedin?url=...` ($0.01) as direct backup
+2. If still no email: Tomba `/v1/email-format?domain=...` ($0.01 once per company, cache by domain) → construct from top pattern → Tomba `/v1/email-verifier` ($0.01)
+3. If no `result === "deliverable"`: mark "LinkedIn only — recruiter to InMail"
+
+For tech candidates, also run `exa/contents` ($0.002) on the candidate's LinkedIn URL — returns full markdown profile (title, work history, recent posts, GitHub link). Optionally `exa/contents` on the GitHub repo for a 1-line "what they build" snippet.
 
 ### Step 6 — Rank
 
