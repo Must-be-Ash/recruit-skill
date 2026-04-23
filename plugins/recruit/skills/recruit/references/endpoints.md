@@ -344,8 +344,6 @@ Response shape:
 
 `content` includes inline image URLs as Markdown — strip those before passing to the LLM if you want a tighter prompt.
 
-(Firecrawl also has a `/search` endpoint at $0.0252, but it returns 3 results vs Exa search's 25 at $0.01 — 20× more expensive per result. Use Exa search for sourcing.)
-
 ---
 
 ## Serper
