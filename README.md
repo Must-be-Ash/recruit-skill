@@ -1,5 +1,7 @@
 # recruit — a Claude Code skill for x402-powered candidate sourcing
 
+> **Not maintained.** x402 and the services this uses may have changed since it was built; check the latest x402 docs before relying on it.
+
 A Claude Code skill that gives an agent the ability to source candidates for a recruiter by orchestrating pay-per-call x402 endpoints (Apollo, Tomba, Exa, Hunter, Minerva, Firecrawl). Payments settle automatically in USDC on Base from the user's [awal](https://www.npmjs.com/package/awal) agent wallet.
 
 The agent's output is a ranked, evidence-backed markdown shortlist — not raw API dumps.
